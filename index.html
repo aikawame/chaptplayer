@@ -11,7 +11,7 @@
 <body>
 <div id="player">
   <video id="video" ref="video" :src="url"></video>
-  <div id="overlay" ref="overlay" :style="{ height: height }" v-cloak>
+  <div id="overlay" ref="overlay" :class="{ loaded: loaded }" :style="{ height: height }">
     <div id="play-area">
       <button id="previous-button" @click="skipPrevious" v-if="chapters.length || 1">
         <i class="icon">skip_previous</i>

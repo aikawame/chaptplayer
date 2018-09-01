@@ -1,8 +1,5 @@
 /* Common */
 
-[v-cloak] {
-  display: none;
-}
 * {
   background: transparent;
   border: none;
@@ -43,6 +40,12 @@ i.icon {
   right: 0;
   top: 0;
   width: 100%;
+}
+#overlay {
+  display: none;
+}
+#overlay.loaded {
+  display: block;
 }
 
 /* Play area */
