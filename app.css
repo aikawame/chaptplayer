@@ -82,7 +82,7 @@ i.icon {
   position: absolute;
   width: 100%;
 }
-#control-area #playback-time {
+#control-area #play-time {
   align-items: center;
   display: flex;
   height: 2rem;

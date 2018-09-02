@@ -10,7 +10,14 @@
 </head>
 <body>
 <div id="player">
-  <video id="video" ref="video" :src="url"></video>
+  <video
+    id="video"
+    ref="video"
+    :src="url"
+    @loadedmetadata="initializeMetadata"
+    @timeupdate="syncCurrentTime"
+  >
+  </video>
   <div
     id="overlay"
     ref="overlay"
@@ -19,7 +26,7 @@
     @mouseenter="showOverlay"
     @mouseleave="hideOverlay"
   >
-    <div id="play-area" v-if="isShowPlayArea">
+    <div id="play-area" v-if="visiblePlayArea">
       <button id="previous-button" @click="skipPrevious" v-if="chapters.length || 1">
         <i class="icon">skip_previous</i>
       </button>
@@ -30,41 +37,47 @@
         <i class="icon">skip_next</i>
       </button>
     </div>
-    <div id="control-area" v-if="isShowControlArea">
-      <div id="playback-time">
+    <div id="control-area" v-if="visibleControlArea">
+      <div id="play-time">
         {{ currentTime|formatTime }}&nbsp;/&nbsp;{{ totalTime|formatTime }}
       </div>
       <div id="other-buttons">
         <button id="speed-button" @click="toggleSpeedMenu">
           <i class="icon">fast_forward</i>
           <span id="current-speed" v-if="currentSpeed !== 1">
-            {{ currentSpeed }}<span id="current-speed-unit">x</span>
+            {{ currentSpeed }}x
           </span>
         </button>
         <button id="mute-button" @click="toggleMute">
           <i class="icon">{{ muted ? 'volume_off' : 'volume_up' }}</i>
         </button>
         <button id="fullscreen-button" @click="toggleFullscreen">
-          <i class="icon">{{ fullscreen ? 'fullscreen_exit' : 'fullscreen' }}</i>
+          <i class="icon">{{ fullscreened ? 'fullscreen_exit' : 'fullscreen' }}</i>
         </button>
       </div>
       <div id="seekbar-ranges">
         <label>
           <input
             id="seekbar-range"
-            ref="seekbar"
             type="range"
             min="0"
             :max="totalTime"
             step="1"
             v-model="currentTime"
+            @input="handleSeekbarInput"
           />
         </label>
       </div>
     </div>
-    <div id="speed-menu" class="menu" v-if="isShowSpeedMenu">
-      <label v-for="speed in speeds" @click="onChangeSpeed">
-        <input type="radio" name="speed" :value="speed" :checked="speed === currentSpeed" v-model="currentSpeed" />
+    <div id="speed-menu" class="menu" v-if="visibleSpeedMenu">
+      <label v-for="speed in speeds" @click="hideSpeedMenu">
+        <input
+          type="radio"
+          name="speed"
+          :value="speed"
+          :checked="speed === currentSpeed"
+          v-model="currentSpeed"
+        />
         {{ speed|formatSpeed }}
       </label>
     </div>
@@ -82,41 +95,39 @@ new Vue({
   el: '#player',
   data() {
     return {
+      loaded: false,
       url: '',
       binary: '',
-      loaded: false,
       height: 0,
-      chapters: [],
       totalTime: 0,
+      speeds: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
+      chapters: [0],
       currentTime: 0,
+      currentSpeed: 1,
+      currentChapter: 0,
       paused: true,
       muted: false,
-      fullscreen: false,
-      speeds: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
-      currentSpeed: 1,
-      isShowPlayArea: false,
-      isShowControlArea: false,
-      isShowSpeedMenu: false
+      fullscreened: false,
+      visiblePlayArea: false,
+      visibleControlArea: false,
+      visibleSpeedMenu: false
     };
   },
   created() {
     this.url = getUrlParam('url');
   },
   mounted() {
-    window.addEventListener('keyup', this.onKeyup);
-    window.addEventListener('resize', this.onResizeWindow);
-    this.$refs.video.addEventListener('loadedmetadata', this.onLoadedMetadata);
-    this.$refs.video.addEventListener('timeupdate', this.onTimeUpdate);
-    this.$refs.seekbar.addEventListener('input', this.onInputSeekbar);
+    window.addEventListener('resize', this.syncHeight);
+    window.addEventListener('keyup', this.handleKeypress);
   },
   destroyed() {
-    window.removeEventListener('keyup', this.onKeyup);
-    window.removeEventListener('resize', this.onResizeWindow);
-    this.$refs.video.removeEventListener('loadedmetadata', this.onLoadedMetadata);
-    this.$refs.video.removeEventListener('timeupdate', this.onTimeUpdate);
-    this.$refs.seekbar.removeEventListener('input', this.onInputSeekbar);
+    window.removeEventListener('resize', this.syncHeight);
+    window.removeEventListener('keyup', this.handleKeypress);
   },
   watch: {
+    currentSpeed(value) {
+      this.$refs.video.playbackRate = value;
+    },
     paused(value) {
       if (value !== this.$refs.video.paused) {
         this.$refs.video.paused ? this.$refs.video.play() : this.$refs.video.pause();
@@ -126,13 +137,74 @@ new Vue({
       if (value !== this.$refs.video.muted) {
         this.$refs.video.muted = !this.$refs.video.muted;
       }
-    },
-    currentSpeed(value) {
-      this.$refs.video.playbackRate = value;
-    },
+    }
   },
   methods: {
-    onKeyup(event) {
+    initializeMetadata() {
+      this.totalTime = this.$refs.video.duration;
+      this.height = this.$refs.video.clientHeight;
+      this.paused = false;
+      this.loaded = true;
+    },
+    syncHeight() {
+      this.height = this.$refs.video.clientHeight;
+    },
+    syncCurrentTime() {
+      this.currentTime = this.$refs.video.currentTime;
+    },
+    togglePlay() {
+      this.paused = !this.paused;
+    },
+    skipNext() {
+      // TODO: Implement.
+    },
+    skipPrevious() {
+      // TODO: Implement.
+    },
+    increaseSpeed() {
+      const index = this.speeds.indexOf(this.currentSpeed);
+      if (index < this.speeds.length - 1) {
+        this.currentSpeed = this.speeds[index + 1];
+      }
+    },
+    decreaseSpeed() {
+      const index = this.speeds.indexOf(this.currentSpeed);
+      if (index > 0) {
+        this.currentSpeed = this.speeds[index - 1];
+      }
+    },
+    toggleMute() {
+      this.muted = !this.muted;
+    },
+    toggleFullscreen() {
+      this.fullscreened = !this.fullscreened;
+      // API can only be initiated by a user gesture.
+      if (this.fullscreened && !document.webkitFullscreenElement) {
+        this.$el.webkitRequestFullscreen();
+      } else {
+        document.webkitExitFullscreen();
+      }
+    },
+    showOverlay() {
+      this.visiblePlayArea = true;
+      this.visibleControlArea = true;
+      this.visibleSpeedMenu = false;
+    },
+    hideOverlay() {
+      this.visiblePlayArea = false;
+      this.visibleControlArea = false;
+      this.visibleSpeedMenu = false;
+    },
+    toggleSpeedMenu() {
+      this.visibleSpeedMenu = !this.visibleSpeedMenu;
+    },
+    hideSpeedMenu() {
+      this.visibleSpeedMenu = false;
+    },
+    handleSeekbarInput(event) {
+      this.$refs.video.currentTime = event.target.value;
+    },
+    handleKeypress(event) {
       switch (event.code) {
         case 'Space':
           this.togglePlay();
@@ -155,73 +227,6 @@ new Vue({
         case 'KeyF':
           if (event.altKey) this.toggleFullscreen();
           break;
-      }
-    },
-    onResizeWindow() {
-      this.height = this.$refs.video.clientHeight;
-    },
-    onLoadedMetadata() {
-      this.loaded = true;
-      this.totalTime = this.$refs.video.duration;
-      this.height = this.$refs.video.clientHeight;
-      this.paused = false;
-    },
-    onTimeUpdate() {
-      this.currentTime = this.$refs.video.currentTime;
-    },
-    onInputSeekbar() {
-      this.$refs.video.currentTime = this.$refs.seekbar.value;
-    },
-    onChangeSpeed() {
-      this.isShowSpeedMenu = false;
-    },
-    showOverlay() {
-      this.isShowPlayArea = true;
-      this.isShowControlArea = true;
-      this.isShowSpeedMenu = false;
-    },
-    hideOverlay() {
-      this.isShowPlayArea = false;
-      this.isShowControlArea = false;
-      this.isShowSpeedMenu = false;
-    },
-    skipNext() {
-      // TODO: Implement.
-    },
-    skipPrevious() {
-      // TODO: Implement.
-    },
-    togglePlay() {
-      this.paused = !this.paused;
-    },
-    toggleSpeedMenu() {
-      this.isShowSpeedMenu = !this.isShowSpeedMenu;
-    },
-    increaseSpeed() {
-      const index = this.speeds.indexOf(this.currentSpeed);
-      if (index < this.speeds.length - 1) {
-        this.currentSpeed = this.speeds[index + 1];
-      }
-    },
-    decreaseSpeed() {
-      const index = this.speeds.indexOf(this.currentSpeed);
-      if (index > 0) {
-        this.currentSpeed = this.speeds[index - 1];
-      }
-    },
-    toggleMute() {
-      this.muted = !this.muted;
-    },
-    toggleFullscreen() {
-      this.fullscreen = !this.fullscreen;
-      this._toggleFullscreen(); // API can only be initiated by a user gesture.
-    },
-    _toggleFullscreen() {
-      // TODO: Support other browsers.
-      if (this.fullscreen && !document.webkitFullscreenElement) {
-        this.$el.webkitRequestFullscreen();
-      } else {
-        document.webkitExitFullscreen();
       }
     }
   }
