@@ -11,8 +11,15 @@
 <body>
 <div id="player">
   <video id="video" ref="video" :src="url"></video>
-  <div id="overlay" ref="overlay" :class="{ loaded: loaded }" :style="{ height: height }">
-    <div id="play-area">
+  <div
+    id="overlay"
+    ref="overlay"
+    :class="{ loaded: loaded }"
+    :style="{ height: height }"
+    @mouseenter="showOverlay"
+    @mouseleave="hideOverlay"
+  >
+    <div id="play-area" v-if="isShowPlayArea">
       <button id="previous-button" @click="skipPrevious" v-if="chapters.length || 1">
         <i class="icon">skip_previous</i>
       </button>
@@ -23,7 +30,7 @@
         <i class="icon">skip_next</i>
       </button>
     </div>
-    <div id="control-area">
+    <div id="control-area" v-if="isShowControlArea">
       <div id="playback-time">
         {{ currentTime|formatTime }}&nbsp;/&nbsp;{{ totalTime|formatTime }}
       </div>
@@ -87,6 +94,8 @@ new Vue({
       fullscreen: false,
       speeds: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
       currentSpeed: 1,
+      isShowPlayArea: false,
+      isShowControlArea: false,
       isShowSpeedMenu: false
     };
   },
@@ -128,6 +137,7 @@ new Vue({
       this.loaded = true;
       this.totalTime = this.$refs.video.duration;
       this.height = this.$refs.video.clientHeight;
+      this.paused = false;
     },
     onTimeUpdate() {
       this.currentTime = this.$refs.video.currentTime;
@@ -136,6 +146,16 @@ new Vue({
       this.$refs.video.currentTime = this.$refs.seekbar.value;
     },
     onChangeSpeed() {
+      this.isShowSpeedMenu = false;
+    },
+    showOverlay() {
+      this.isShowPlayArea = true;
+      this.isShowControlArea = true;
+      this.isShowSpeedMenu = false;
+    },
+    hideOverlay() {
+      this.isShowPlayArea = false;
+      this.isShowControlArea = false;
       this.isShowSpeedMenu = false;
     },
     skipNext() {
