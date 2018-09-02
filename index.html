@@ -103,12 +103,14 @@ new Vue({
     this.url = getUrlParam('url');
   },
   mounted() {
+    window.addEventListener('keyup', this.onKeyup);
     window.addEventListener('resize', this.onResizeWindow);
     this.$refs.video.addEventListener('loadedmetadata', this.onLoadedMetadata);
     this.$refs.video.addEventListener('timeupdate', this.onTimeUpdate);
     this.$refs.seekbar.addEventListener('input', this.onInputSeekbar);
   },
   destroyed() {
+    window.removeEventListener('keyup', this.onKeyup);
     window.removeEventListener('resize', this.onResizeWindow);
     this.$refs.video.removeEventListener('loadedmetadata', this.onLoadedMetadata);
     this.$refs.video.removeEventListener('timeupdate', this.onTimeUpdate);
@@ -130,6 +132,31 @@ new Vue({
     },
   },
   methods: {
+    onKeyup(event) {
+      switch (event.code) {
+        case 'Space':
+          this.togglePlay();
+          break;
+        case 'ArrowRight':
+          this.skipNext();
+          break;
+        case 'ArrowLeft':
+          this.skipPrevious();
+          break;
+        case 'ArrowUp':
+          this.increaseSpeed();
+          break;
+        case 'ArrowDown':
+          this.decreaseSpeed();
+          break;
+        case 'KeyM':
+          if (event.altKey) this.toggleMute();
+          break;
+        case 'KeyF':
+          if (event.altKey) this.toggleFullscreen();
+          break;
+      }
+    },
     onResizeWindow() {
       this.height = this.$refs.video.clientHeight;
     },
@@ -169,6 +196,18 @@ new Vue({
     },
     toggleSpeedMenu() {
       this.isShowSpeedMenu = !this.isShowSpeedMenu;
+    },
+    increaseSpeed() {
+      const index = this.speeds.indexOf(this.currentSpeed);
+      if (index < this.speeds.length - 1) {
+        this.currentSpeed = this.speeds[index + 1];
+      }
+    },
+    decreaseSpeed() {
+      const index = this.speeds.indexOf(this.currentSpeed);
+      if (index > 0) {
+        this.currentSpeed = this.speeds[index - 1];
+      }
     },
     toggleMute() {
       this.muted = !this.muted;
