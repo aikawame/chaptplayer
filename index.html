@@ -373,10 +373,10 @@ new Vue({
           this.decreaseSpeed();
           break;
         case 'KeyM':
-          if (event.altKey) this.toggleMute();
+          this.toggleMute();
           break;
         case 'KeyF':
-          if (event.altKey) this.toggleFullscreen();
+          this.toggleFullscreen();
           break;
       }
     }
