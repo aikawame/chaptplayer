@@ -25,13 +25,13 @@
     @mouseleave="hideOverlay"
   >
     <div id="play-area" v-if="visiblePlayArea">
-      <button id="previous-button" @click="skipPrevious" v-if="chapters.length || 1">
+      <button id="previous-button" @click="skipPrevious" v-if="chapters.length > 1">
         <i class="icon">skip_previous</i>
       </button>
       <button id="play-button" @click="togglePlay">
         <i class="icon">{{ paused ? 'play_arrow' : 'pause' }}</i>
       </button>
-      <button id="next-button" @click="skipNext" v-if="chapters.length || 1">
+      <button id="next-button" @click="skipNext" v-if="chapters.length > 1">
         <i class="icon">skip_next</i>
       </button>
     </div>
@@ -233,6 +233,84 @@ const getUrlParam = targetKey => {
   }
 };
 
+const bufferToString = buffer => {
+  return (new TextDecoder).decode(buffer);
+};
+
+const bufferToInt = (buffer, int = 0, bufferPosition = 0) => {
+  int += buffer[buffer.length - bufferPosition - 1] * Math.pow(256, bufferPosition);
+  if (bufferPosition < buffer.length - 1) {
+    return bufferToInt(buffer, int, bufferPosition + 1);
+  }
+  return int;
+};
+
+class Mp4 {
+  constructor(buffer) {
+    this.array = new Uint8Array(buffer);
+    this.currentIndex = 0;
+    this.chapters = [];
+  }
+
+  getChapters() {
+    this.currentIndex = 0;
+    this.seekBox(['moov', 'udta', 'chpl']);
+    this.seekChapters();
+    return this.chapters;
+  }
+
+  seekBox(targetTypes) {
+    const size = bufferToInt(this.array.subarray(this.currentIndex, this.currentIndex + 4));
+    const type = bufferToString(this.array.subarray(this.currentIndex + 4, this.currentIndex + 8));
+    console.log({type: type, size: size});
+    if (type === targetTypes[0]) {
+      this.currentIndex += 8;
+      targetTypes.shift();
+      if (targetTypes.length === 0) {
+        return this;
+      }
+    } else {
+      this.currentIndex += size;
+    }
+    if (this.currentIndex < this.array.length) {
+      return this.seekBox(targetTypes);
+    } else {
+      throw new Error('Type not found.');
+    }
+  }
+
+  seekChapters(initial = true, rest = 0) {
+    if (initial === true) {
+      rest = this.getChapterCount();
+      this.currentIndex += 9;
+    }
+    const time = bufferToInt(this.array.subarray(this.currentIndex, this.currentIndex + 8));
+    const nameLength = bufferToInt(this.array.subarray(this.currentIndex + 8, this.currentIndex + 9));
+    const name = bufferToString(this.array.subarray(this.currentIndex + 9, this.currentIndex + 9 + nameLength));
+    console.log({name: name, time: time});
+    this.chapters.push(time / 10000000);
+    rest--;
+    if (rest === 0) {
+      return this;
+    }
+    this.currentIndex += (9 + nameLength);
+    this.seekChapters(false, rest);
+  }
+
+  getChapterCount() {
+    const firstParam = bufferToInt(this.array.subarray(this.currentIndex, this.currentIndex + 1));
+    if (firstParam !== 1) {
+      throw new Error('Invalid chpl box.');
+    }
+    const chapterCount = bufferToInt(this.array.subarray(this.currentIndex + 1, this.currentIndex + 9));
+    if (chapterCount > 1000) {
+      throw new Error('Too many chapters.')
+    }
+    console.log({chapterCount: chapterCount});
+    return chapterCount;
+  }
+}
+
 Vue.filter('formatTime', second => {
   // TODO: Optimize format by time.
   return new Date(second * 1000).toISOString().slice(11, -5);
@@ -248,14 +326,12 @@ new Vue({
     return {
       loaded: false,
       url: '',
-      binary: '',
       height: 0,
       totalTime: 0,
       speeds: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
       chapters: [0],
       currentTime: 0,
       currentSpeed: 1,
-      currentChapter: 0,
       paused: true,
       muted: false,
       fullscreened: false,
@@ -266,6 +342,11 @@ new Vue({
   },
   created() {
     this.url = getUrlParam('url');
+    fetch(this.url).then(response => {
+      response.arrayBuffer().then(buffer => {
+        this.chapters = (new Mp4(buffer)).getChapters();
+      });
+    });
   },
   mounted() {
     window.addEventListener('resize', this.syncHeight);
@@ -307,10 +388,20 @@ new Vue({
       this.paused = !this.paused;
     },
     skipNext() {
-      // TODO: Implement.
+      try {
+        this.$refs.video.currentTime = this.chapters.find(chapter => {
+          return chapter > this.currentTime;
+        }) - 0.5;
+      } catch {
+      }
     },
     skipPrevious() {
-      // TODO: Implement.
+      try {
+        this.$refs.video.currentTime = this.chapters.slice().reverse().find(chapter => {
+          return chapter < this.currentTime;
+        }) - 0.5;
+      } catch {
+      }
     },
     increaseSpeed() {
       const index = this.speeds.indexOf(this.currentSpeed);
